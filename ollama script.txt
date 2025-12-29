@@ -1,0 +1,41 @@
+1. sudo apt update -y \&\& sudo apt upgrade -y
+   
+2. sudo snap install ollama
+   
+3. curl -fsSL https://ollama.com/install.sh | sh
+   
+4. ollama --version
+   
+5. ollama run deepseek-r1:8b
+   
+6. sudo snap remove docker || true (if you have already then remove)
+   
+7. sudo apt-get install -y ca-certificates curl gnupg lsb-release
+   
+8. sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \\
+     sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   echo \\
+     "deb \[arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \\
+     https://download.docker.com/linux/ubuntu \\
+     $(lsb\_release -cs) stable" | \\
+     sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   
+9. sudo apt-get update
+   
+10. sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+11. sudo systemctl enable docker
+    
+12. sudo systemctl start docker
+    
+13. sudo docker run -d \\
+      --network host \\
+      --name open-webui \\
+      -e OLLAMA\_BASE\_URL=http://localhost:11434 \\
+      -v open-webui:/app/backend/data \\
+      --add-host=host.docker.internal:host-gateway \\
+      --restart always \\
+      ghcr.io/open-webui/open-webui:main
+    
+14. http://<your-server-ip>:8080

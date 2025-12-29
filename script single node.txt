@@ -1,0 +1,129 @@
+#!/bin/bash
+# =====================================================
+# Single Node Hadoop 1.2.1 Cluster Installation Script
+# First running this you have to do ( sudo apt update)
+# Then ssh-keygen ,  cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+# ssh localhost
+# now paste this script in .sh format and change the permission to chmod +x xyx.sh and run ./xyz.sh
+# Run this script AFTER logging into ssh localhost
+# 
+# =====================================================
+
+set -e
+
+echo "01) Installing OpenJDK 8..."
+sudo apt-get install -y openjdk-8-jdk
+
+echo "02) Downloading Hadoop 1.2.1 if not already present..."
+if [ ! -f "hadoop-1.2.1.tar.gz" ]; then
+    wget -c https://archive.apache.org/dist/hadoop/common/hadoop-1.2.1/hadoop-1.2.1.tar.gz
+fi
+
+echo "03) Extracting Hadoop if not already extracted..."
+if [ ! -d "/usr/local/hadoop" ]; then
+    tar -xzvf hadoop-1.2.1.tar.gz
+    echo "08) Moving Hadoop to /usr/local/hadoop..."
+    sudo mv hadoop-1.2.1 /usr/local/hadoop
+fi
+
+echo "04) Exporting Hadoop environment variables for this session..."
+export HADOOP_PREFIX=/usr/local/hadoop/
+export PATH=$PATH:$HADOOP_PREFIX/bin
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export PATH=$PATH:$JAVA_HOME
+
+echo "05) Persisting environment variables in ~/.bashrc..."
+grep -qxF "export HADOOP_PREFIX=/usr/local/hadoop/" ~/.bashrc || echo "export HADOOP_PREFIX=/usr/local/hadoop/" >> ~/.bashrc
+grep -qxF "export PATH=\$PATH:\$HADOOP_PREFIX/bin" ~/.bashrc || echo "export PATH=\$PATH:\$HADOOP_PREFIX/bin" >> ~/.bashrc
+grep -qxF "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" ~/.bashrc || echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> ~/.bashrc
+grep -qxF "export PATH=\$PATH:\$JAVA_HOME" ~/.bashrc || echo "export PATH=\$PATH:\$JAVA_HOME" >> ~/.bashrc
+
+# -------------------------------
+# Hadoop Configuration
+# -------------------------------
+
+echo "06) Updating hadoop-env.sh..."
+HADOOP_ENV="/usr/local/hadoop/conf/hadoop-env.sh"
+
+# Ensure JAVA_HOME is correct
+if grep -q "^# export JAVA_HOME=" "$HADOOP_ENV"; then
+    sudo sed -i 's|^# export JAVA_HOME=.*|export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64|' "$HADOOP_ENV"
+elif ! grep -q "^export JAVA_HOME=" "$HADOOP_ENV"; then
+    echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" | sudo tee -a "$HADOOP_ENV"
+else
+    sudo sed -i 's|^export JAVA_HOME=.*|export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64|' "$HADOOP_ENV"
+fi
+
+# Ensure HADOOP_OPTS is added below JAVA_HOME
+if ! grep -q "HADOOP_OPTS=-Djava.net.preferIPV4Stack=true" "$HADOOP_ENV"; then
+    sudo sed -i '/^export JAVA_HOME=/a export HADOOP_OPTS=-Djava.net.preferIPV4Stack=true' "$HADOOP_ENV"
+fi
+
+# -------------------------------
+# XML Configs
+# -------------------------------
+echo "07) Updating core-site.xml..."
+CORE_SITE="/usr/local/hadoop/conf/core-site.xml"
+sudo tee "$CORE_SITE" > /dev/null <<EOF
+<configuration>
+  <property>
+    <name>fs.default.name</name>
+    <value>hdfs://localhost:9000</value>
+  </property>
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/usr/local/hadoop/tmp</value>
+  </property>
+</configuration>
+EOF
+
+echo "08) Updating hdfs-site.xml..."
+HDFS_SITE="/usr/local/hadoop/conf/hdfs-site.xml"
+sudo tee "$HDFS_SITE" > /dev/null <<EOF
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>
+  </property>
+</configuration>
+EOF
+
+echo "09) Updating mapred-site.xml..."
+MAPRED_SITE="/usr/local/hadoop/conf/mapred-site.xml"
+sudo tee "$MAPRED_SITE" > /dev/null <<EOF
+<configuration>
+  <property>
+    <name>mapred.job.tracker</name>
+    <value>hdfs://localhost:9001</value>
+  </property>
+</configuration>
+EOF
+
+# -------------------------------
+# Hadoop Setup
+# -------------------------------
+echo "10) Creating tmp directory for Hadoop..."
+sudo mkdir -p /usr/local/hadoop/tmp
+sudo chown -R $USER:$USER /usr/local/hadoop/tmp
+
+echo "11) Reloading bash..."
+. ~/.bashrc   # works in both bash and sh
+
+echo "12) Formatting Hadoop Namenode..."
+hadoop namenode -format -force
+
+echo "13) Starting DFS..."
+start-dfs.sh
+
+echo "14) Starting MapReduce..."
+start-mapred.sh
+
+echo "15) Checking Java processes..."
+jps || true
+
+echo "✅ Hadoop Single Node Cluster setup completed successfully!"
+echo "===================================================="
+echo "Now open in your browser (replace with your public IP if remote):"
+echo " - Namenode UI:  http://localhost:50070"
+echo " - JobTracker UI: http://localhost:50030"
+echo "===================================================="
